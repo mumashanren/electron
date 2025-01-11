@@ -6,39 +6,41 @@ Subject: disable_hidden.patch
 Electron uses this to disable background throttling for hidden windows.
 
 diff --git a/content/browser/renderer_host/render_widget_host_impl.cc b/content/browser/renderer_host/render_widget_host_impl.cc
-index a689c6e60b5d55c1dd2f09c40da9c8a60786b90f..f49cf68e4b5be592000b193a3b1fae18e0bd41dc 100644
+index 7ba8c01db7e9383c27c37cd130f094a0ccab6f9a..6dac8bda9b799b2d20f7fa45d7323204b28631e1 100644
 --- a/content/browser/renderer_host/render_widget_host_impl.cc
 +++ b/content/browser/renderer_host/render_widget_host_impl.cc
-@@ -800,6 +800,9 @@ void RenderWidgetHostImpl::WasHidden() {
-   if (is_hidden_)
+@@ -816,6 +816,10 @@ void RenderWidgetHostImpl::WasHidden() {
      return;
+   }
  
-+  if (disable_hidden_)
++  if (disable_hidden_) {
 +    return;
++  }
 +
-   RejectMouseLockOrUnlockIfNecessary(
-       blink::mojom::PointerLockResult::kWrongDocument);
- 
+   // Cancel pending pointer lock requests, unless there's an open user prompt.
+   // Prompts should remain open and functional across tab switches.
+   if (!delegate_->IsWaitingForPointerLockPrompt(this)) {
 diff --git a/content/browser/renderer_host/render_widget_host_impl.h b/content/browser/renderer_host/render_widget_host_impl.h
-index 3910d3a1642abc19d01556b275582170ecc520ce..60224d202aa14bd83d5eb2a52b13e37282d621dc 100644
+index 56670ed68f85f671c7eeedbc8ba2367f07163733..51cc0c83c48425f3cb49e44df4bd318f1767d03f 100644
 --- a/content/browser/renderer_host/render_widget_host_impl.h
 +++ b/content/browser/renderer_host/render_widget_host_impl.h
-@@ -896,6 +896,8 @@ class CONTENT_EXPORT RenderWidgetHostImpl
-   void UpdateBrowserControlsState(cc::BrowserControlsState constraints,
-                                   cc::BrowserControlsState current,
-                                   bool animate);
+@@ -1026,6 +1026,9 @@ class CONTENT_EXPORT RenderWidgetHostImpl
+   // Requests a commit and forced redraw in the renderer compositor.
+   void ForceRedrawForTesting();
+ 
 +  // Electron: Prevents the widget from getting hidden.
 +  bool disable_hidden_ = false;
- 
++
   protected:
    // |routing_id| must not be MSG_ROUTING_NONE.
+   // If this object outlives |delegate|, DetachDelegate() must be called when
 diff --git a/content/browser/renderer_host/render_widget_host_view_aura.cc b/content/browser/renderer_host/render_widget_host_view_aura.cc
-index 65daab40548600bff98bdd1273b7325611f6b82f..f09d6289319c5dbaff6002af60cfd53c1a6cc5cc 100644
+index 06686841d7394d68ff5b4845ace2c2c4d689df4b..e65c2b9ed1d6d3cc53ee5ba145aa22cb149d9dde 100644
 --- a/content/browser/renderer_host/render_widget_host_view_aura.cc
 +++ b/content/browser/renderer_host/render_widget_host_view_aura.cc
-@@ -605,7 +605,7 @@ void RenderWidgetHostViewAura::HideImpl() {
-   DCHECK(visibility_ == Visibility::HIDDEN ||
-          visibility_ == Visibility::OCCLUDED);
+@@ -643,7 +643,7 @@ void RenderWidgetHostViewAura::HideImpl() {
+   CHECK(visibility_ == Visibility::HIDDEN ||
+         visibility_ == Visibility::OCCLUDED);
  
 -  if (!host()->is_hidden()) {
 +  if (!host()->is_hidden() && !host()->disable_hidden_) {
