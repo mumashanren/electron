@@ -7,11 +7,11 @@ With WCO, allow chromium to handle synthetic mouse events generated for touch
 actions in the non-client caption area.
 
 diff --git a/ui/views/widget/desktop_aura/desktop_window_tree_host_win.cc b/ui/views/widget/desktop_aura/desktop_window_tree_host_win.cc
-index e534b895eca4e28e003ef35de4a2fb5b32baf88b..756738951476ba1d509935d0eb152c978cfde7e6 100644
+index b001362220febea5641615b4afa7174bccac50ed..0734f637faf3b693c5ae358a3eb495e630f6f54e 100644
 --- a/ui/views/widget/desktop_aura/desktop_window_tree_host_win.cc
 +++ b/ui/views/widget/desktop_aura/desktop_window_tree_host_win.cc
-@@ -1204,6 +1204,10 @@ void DesktopWindowTreeHostWin::HandleWindowScaleFactorChanged(
-   }
+@@ -1314,6 +1314,10 @@ void DesktopWindowTreeHostWin::HandleHeadlessWindowBoundsChanged(
+   window()->SetProperty(aura::client::kHeadlessBoundsKey, bounds);
  }
  
 +bool DesktopWindowTreeHostWin::HandleMouseEventForCaption(UINT message) const {
@@ -22,23 +22,23 @@ index e534b895eca4e28e003ef35de4a2fb5b32baf88b..756738951476ba1d509935d0eb152c97
  DesktopWindowTreeHostWin::GetSingletonDesktopNativeCursorManager() {
    return new DesktopNativeCursorManagerWin();
 diff --git a/ui/views/widget/desktop_aura/desktop_window_tree_host_win.h b/ui/views/widget/desktop_aura/desktop_window_tree_host_win.h
-index b23ba1bf3a49f72d1cd0f0ae4b0f316e7c15fa76..bf0a4869af4aaca15074fae42508b54aef611cf6 100644
+index 1e2c5bb35cc314d44dba85a9bafc5e55bf2b5f14..d110d0a2f005888c4450262fc1887cbf036b126d 100644
 --- a/ui/views/widget/desktop_aura/desktop_window_tree_host_win.h
 +++ b/ui/views/widget/desktop_aura/desktop_window_tree_host_win.h
-@@ -258,6 +258,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
-   void HandleWindowSizeChanging() override;
+@@ -266,6 +266,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostWin
    void HandleWindowSizeUnchanged() override;
    void HandleWindowScaleFactorChanged(float window_scale_factor) override;
+   void HandleHeadlessWindowBoundsChanged(const gfx::Rect& bounds) override;
 +  bool HandleMouseEventForCaption(UINT message) const override;
  
    Widget* GetWidget();
    const Widget* GetWidget() const;
 diff --git a/ui/views/win/hwnd_message_handler.cc b/ui/views/win/hwnd_message_handler.cc
-index 214a596da0dfdff2566a7642ac04e501655c5d88..dff84d16386acfb3ccc72a22878476f1ac463ea1 100644
+index 5c4719e1f2084f9d1b99f12b614396f68a3903aa..a1c0da5b4fefad8b2692cbe04d2d183c07230985 100644
 --- a/ui/views/win/hwnd_message_handler.cc
 +++ b/ui/views/win/hwnd_message_handler.cc
-@@ -3094,15 +3094,19 @@ LRESULT HWNDMessageHandler::HandleMouseEventInternal(UINT message,
-       SetMsgHandled(FALSE);
+@@ -3142,15 +3142,19 @@ LRESULT HWNDMessageHandler::HandleMouseEventInternal(UINT message,
+     }
      // We must let Windows handle the caption buttons if it's drawing them, or
      // they won't work.
 +    bool simulate_mouse_event_for_caption = false;
@@ -54,18 +54,18 @@ index 214a596da0dfdff2566a7642ac04e501655c5d88..dff84d16386acfb3ccc72a22878476f1
      // Let resize events fall through. Ignore everything else, as we're either
      // letting Windows handle it above or we've already handled the equivalent
      // touch message.
--    if (!IsHitTestOnResizeHandle(hittest))
-+    if (!IsHitTestOnResizeHandle(hittest) && !simulate_mouse_event_for_caption)
+-    if (!IsHitTestOnResizeHandle(hittest)) {
++    if (!IsHitTestOnResizeHandle(hittest) && !simulate_mouse_event_for_caption) {
        return 0;
+     }
    }
- 
 diff --git a/ui/views/win/hwnd_message_handler_delegate.h b/ui/views/win/hwnd_message_handler_delegate.h
-index da6afe2ae8940faebe3fbacfd7780fa0d5b1591a..4263d68e8b01eb961ab0e38d6b64b0c0b24146eb 100644
+index 04dea68d74ea4f559db60f716c919e555db9ec80..2f8bd1a3c156bb6c04663c74b7279bb59926fc3d 100644
 --- a/ui/views/win/hwnd_message_handler_delegate.h
 +++ b/ui/views/win/hwnd_message_handler_delegate.h
-@@ -251,6 +251,10 @@ class VIEWS_EXPORT HWNDMessageHandlerDelegate {
-   // Called when the window scale factor has changed.
-   virtual void HandleWindowScaleFactorChanged(float window_scale_factor) = 0;
+@@ -255,6 +255,10 @@ class VIEWS_EXPORT HWNDMessageHandlerDelegate {
+   // Called when the headless window bounds has changed.
+   virtual void HandleHeadlessWindowBoundsChanged(const gfx::Rect& bounds) = 0;
  
 +  // Called when synthetic mouse event is generated for touch event on
 +  // caption buttons.
